@@ -1,5 +1,9 @@
 import datetime
 from enum import Enum
+from typing import Iterable, Sequence
+
+import numpy as np
+
 
 class MeasurementField(Enum):
     """
@@ -9,6 +13,7 @@ class MeasurementField(Enum):
         - the CSV column name
         - whether the field should be graphed
     """
+
     PRCP = ("PRCP", True)
     TAVG = ("TAVG", True)
     TMAX = ("TMAX", True)
@@ -26,7 +31,16 @@ class MeasurementField(Enum):
 
 
 class StationInfo:
-    def __init__(self, name=None, year=None, month=None, longitude=None, latitude=None, elevation=None):
+    def __init__(
+        self,
+        name=None,
+        year=None,
+        month=None,
+        day=None,
+        longitude=None,
+        latitude=None,
+        elevation=None,
+    ):
         """
         Create and store general information about a weather station
         for one specific year and month.
@@ -42,9 +56,11 @@ class StationInfo:
         self.name = name
         self.year = year
         self.month = month
+        self.day = day
 
         if self.year is not None and self.month is not None:
-            self.date = datetime.datetime(self.year, self.month, 1)
+            safe_day = self.day if self.day is not None else 1
+            self.date = datetime.datetime(self.year, self.month, safe_day)
         else:
             self.date = None
 
@@ -53,9 +69,12 @@ class StationInfo:
         self.elevation = elevation
         self.coords = (self.longitude, self.latitude, self.elevation)
 
+    def __str__(self):
+        return f"StationInfo(name={self.name}, date={self.date}, coords={self.coords})"
+
 
 class StationMeasurements:
-    def __init__(self, station_info, values=None):
+    def __init__(self, station_info: StationInfo, values=None):
         """
         Create and store weather measurements for one station and month.
 
@@ -69,8 +88,71 @@ class StationMeasurements:
         for field_name, value in self.values.items():
             setattr(self, field_name, value)
 
+    def __str__(self):
+        return f"StationMeasurements(station_info={self.station_info}, values={self.values})"
+
     def get(self, field: MeasurementField):
         """
         Return the value for a MeasurementField enum member.
         """
         return self.values.get(field.column_name, None)
+
+
+def graphable_fields() -> list[MeasurementField]:
+    """
+    Return only fields marked as graphable.
+    """
+    return [field for field in MeasurementField if field.graphable]
+
+
+def measurements_to_matrix(
+    measurements: Iterable[StationMeasurements],
+    fields: Sequence[MeasurementField] | None = None,
+    drop_incomplete_rows: bool = False,
+    sort_by_date: bool = True,
+) -> tuple[np.ndarray, list[datetime.datetime], list[MeasurementField]]:
+    """
+    Convert station measurements into a numeric matrix for linear algebra.
+
+    Returns:
+        matrix: shape (n_rows, n_fields), with missing values represented as np.nan.
+        dates: list of datetime values aligned with matrix rows.
+        selected_fields: the field order used for matrix columns.
+    """
+    selected_fields = list(fields) if fields is not None else list(MeasurementField)
+
+    measurements_list = list(measurements)
+    if sort_by_date:
+        measurements_list.sort(
+            key=lambda m: m.station_info.date or datetime.datetime.min
+        )
+
+    rows: list[list[float]] = []
+    dates: list[datetime.datetime] = []
+
+    for measurement in measurements_list:
+        date = measurement.station_info.date
+        if date is None:
+            continue
+
+        row: list[float] = []
+        has_missing_value = False
+
+        for field in selected_fields:
+            value = measurement.get(field)
+            if value is None:
+                row.append(np.nan)
+                has_missing_value = True
+            else:
+                row.append(float(value))
+
+        if drop_incomplete_rows and has_missing_value:
+            continue
+
+        rows.append(row)
+        dates.append(date)
+
+    if not rows:
+        return np.empty((0, len(selected_fields))), [], selected_fields
+
+    return np.array(rows, dtype=float), dates, selected_fields
