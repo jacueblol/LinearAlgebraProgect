@@ -7,11 +7,11 @@ import numpy as np
 
 class MeasurementField(Enum):
     """
-    Enum of supported measurement fields.
+    Weather fields used in this project.
 
-    Each value stores:
-        - the CSV column name
-        - whether the field should be graphed
+    Each enum value stores:
+    1. CSV column name
+    2. whether we want to graph it
     """
 
     PRCP = ("PRCP", True)
@@ -42,16 +42,15 @@ class StationInfo:
         elevation=None,
     ):
         """
-        Create and store general information about a weather station
-        for one specific year and month.
+        Store station metadata for one row in the dataset.
 
         Parameters:
-            name (str): Name of the weather station.
-            year (int): Year of the measurement, like 1995.
-            month (int): Month of the measurement, from 1 to 12.
-            longitude (float): Station longitude in decimal degrees.
-            latitude (float): Station latitude in decimal degrees.
-            elevation (float): Station elevation, usually in meters.
+            name (str): Station name.
+            year (int): Year of this record.
+            month (int): Month of this record.
+            longitude (float): Longitude.
+            latitude (float): Latitude.
+            elevation (float): Elevation.
         """
         self.name = name
         self.year = year
@@ -76,11 +75,11 @@ class StationInfo:
 class StationMeasurements:
     def __init__(self, station_info: StationInfo, values=None):
         """
-        Create and store weather measurements for one station and month.
+        Store measured values for one station/date record.
 
         Parameters:
-            station_info (StationInfo): The station metadata.
-            values (dict): Dictionary mapping field names to values.
+            station_info (StationInfo): Metadata (name/date/location).
+            values (dict): Map from field name to numeric value.
         """
         self.station_info = station_info
         self.values = values if values is not None else {}
@@ -93,14 +92,14 @@ class StationMeasurements:
 
     def get(self, field: MeasurementField):
         """
-        Return the value for a MeasurementField enum member.
+        Get the value for one field enum.
         """
         return self.values.get(field.column_name, None)
 
 
 def graphable_fields() -> list[MeasurementField]:
     """
-    Return only fields marked as graphable.
+    Return only fields that are marked for plotting.
     """
     return [field for field in MeasurementField if field.graphable]
 
@@ -112,12 +111,12 @@ def measurements_to_matrix(
     sort_by_date: bool = True,
 ) -> tuple[np.ndarray, list[datetime.datetime], list[MeasurementField]]:
     """
-    Convert station measurements into a numeric matrix for linear algebra.
+    Convert records into a numeric matrix for linear algebra work.
 
     Returns:
-        matrix: shape (n_rows, n_fields), with missing values represented as np.nan.
-        dates: list of datetime values aligned with matrix rows.
-        selected_fields: the field order used for matrix columns.
+        matrix: shape (rows, fields), missing entries are np.nan.
+        dates: date for each matrix row.
+        selected_fields: column order used in the matrix.
     """
     selected_fields = list(fields) if fields is not None else list(MeasurementField)
 
